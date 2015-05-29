@@ -1,0 +1,13 @@
+--- 
+description: "Plots Mean annual data against LGM data"
+load_list: 
+  ccsm4_max_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_36_59_max_t_lgm_ccsm4/max_t_lgm_ccsm4_data.csv"
+  ccsm4_min_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_38_11_min_t_lgm_ccsm4/min_t_lgm_ccsm4_data.csv"
+  mean_annual: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_35_43_mean_annual/mean_annual_data.csv"
+  miroc_max_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_42_0_max_t_lgm_miroc/max_t_lgm_miroc_data.csv"
+  miroc_min_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_41_17_min_t_lgm_miroc/min_t_lgm_miroc_data.csv"
+  mpi_max_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_40_5_max_t_lgm_mpi/max_t_lgm_mpi_data.csv"
+  mpi_min_t: "/home/sb708/Documents/GIS Data/DV/2015_5_29_12_38_58_min_t_lgm_mpi/min_t_lgm_mpi_data.csv"
+name: "Mean Annual vs. LGM - Death Valley"
+process_module: 'mean_annual_averaged_lgm.py'
+plot_module: 'scatter_error.py'
