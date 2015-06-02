@@ -6,7 +6,6 @@ import glob
 import yaml
 import itertools
 import csv
-import imp
 from cement.core import foundation, controller
 from cement.utils import shell
 
@@ -47,7 +46,7 @@ class PlotterData:
         choice = configs[sp.input]
 
         self.list = choice['load_list'].keys()
-        self.set_parameters(choice['name'], choice['description'], choice['process_script'], choice['plot_script'])
+        self.set_parameters(choice['name'], choice['description'], choice['process_module'], choice['plot_module'])
         self.set_data(choice['load_list'])
 
     def scenario(self, s):
@@ -129,4 +128,27 @@ app.run()
 
 PD = PlotterData()
 
-print(PD.scenario('ccsm4_max_t').column('precipitation (mm/yr)'))
+grdevices = importr('grDevices')
+
+r = robjects.r
+
+bqart_qs = map(float, PD.scenario('ccsm4_max_t').column('Qs (m^3/yr)'))
+areas = map(float, PD.scenario('ccsm4_max_t').column('A (km^2)'))
+
+d = {'bqart_qs': robjects.FloatVector(bqart_qs), 'areas': robjects.FloatVector(areas)}
+
+dat_frame = robjects.DataFrame(d)
+
+pp = ggplot2.ggplot(dat_frame) + \
+    ggplot2.aes_string(y='bqart_qs', x='areas') + \
+    ggplot2.ggtitle('WWWOOWOOEWROEW') + \
+    ggplot2.scale_x_continuous('A (km^2)') + \
+    ggplot2.scale_y_continuous('Qs (m^3/yr)') + \
+    ggplot2.geom_point()
+
+
+grdevices = importr('grDevices')
+
+grdevices.pdf(file="file.pdf")
+pp.plot()
+grdevices.dev_off()
