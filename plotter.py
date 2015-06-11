@@ -5,6 +5,10 @@ import os
 import glob
 import yaml
 import itertools
+import math as m
+import rpy2.robjects as robjects
+from rpy2.robjects.packages import importr
+import rpy2.robjects.lib.ggplot2 as ggplot2
 import csv
 from cement.core import foundation, controller
 from cement.utils import shell
@@ -129,26 +133,116 @@ app.run()
 PD = PlotterData()
 
 grdevices = importr('grDevices')
+reshape = importr('reshape2')
+stats = importr('stats', on_conflict="warn")
 
 r = robjects.r
 
-bqart_qs = map(float, PD.scenario('ccsm4_max_t').column('Qs (m^3/yr)'))
-areas = map(float, PD.scenario('ccsm4_max_t').column('A (km^2)'))
+# Area vs. discharge --- Needs to be put into a proper process file
 
-d = {'bqart_qs': robjects.FloatVector(bqart_qs), 'areas': robjects.FloatVector(areas)}
+mean_annual_bqart = map(float, PD.scenario('mean_annual').column('Qw (m^3/s)'))
+areas = map(float, PD.scenario('mean_annual').column('A (km^2)'))
+
+ccsm4_max_bqart = map(float, PD.scenario('ccsm4_max_t').column('Qw (m^3/s)'))
+ccsm4_min_bqart = map(float, PD.scenario('ccsm4_min_t').column('Qw (m^3/s)'))
+mpi_max_bqart = map(float, PD.scenario('mpi_max_t').column('Qw (m^3/s)'))
+mpi_min_bqart = map(float, PD.scenario('mpi_min_t').column('Qw (m^3/s)'))
+miroc_max_bqart = map(float, PD.scenario('miroc_max_t').column('Qw (m^3/s)'))
+miroc_min_bqart = map(float, PD.scenario('miroc_min_t').column('Qw (m^3/s)'))
+
+max_bqart_lgm = []
+for x in range(0, len(ccsm4_max_bqart)):
+    max_bqart_lgm.append(max([ccsm4_max_bqart[x], miroc_max_bqart[x], mpi_max_bqart[x]]))
+
+min_bqart_lgm = []
+for x in range(0, len(ccsm4_max_bqart)):
+    min_bqart_lgm.append(min([ccsm4_min_bqart[x], miroc_min_bqart[x], mpi_min_bqart[x]]))
+
+lgm_mid = []
+lgm_min = []
+lgm_max = []
+
+for x in range(0, len(min_bqart_lgm)):
+		average = (max_bqart_lgm[x] + min_bqart_lgm[x])/2
+		diff = max_bqart_lgm[x]-average
+		lgm_mid.append(average)
+		lgm_min.append(average-diff)
+		lgm_max.append(average+diff)
+		
+
+
+d = {'discharge': robjects.FloatVector(lgm_mid), 'areas': robjects.FloatVector(areas), \
+	'max':robjects.FloatVector(lgm_max), 'min':robjects.FloatVector(lgm_min)}
 
 dat_frame = robjects.DataFrame(d)
 
-pp = ggplot2.ggplot(dat_frame) + \
-    ggplot2.aes_string(y='bqart_qs', x='areas') + \
-    ggplot2.ggtitle('WWWOOWOOEWROEW') + \
-    ggplot2.scale_x_continuous('A (km^2)') + \
-    ggplot2.scale_y_continuous('Qs (m^3/yr)') + \
-    ggplot2.geom_point()
+d2 = {'discharge': robjects.FloatVector(mean_annual_bqart), 'areas': robjects.FloatVector(areas)}
 
+dat_frame2 = robjects.DataFrame(d2)
+
+# Lgm Coefs
+lm = stats.lm("discharge ~ areas", data=dat_frame)
+
+summary = r.summary(lm)
+
+r_sq = summary.rx2('r.squared')
+r_sq = str(+round(r_sq[0],2))
+coefs = r.coef(lm)
+print coefs
+ic = coefs.rx2(1)
+sl_lgm = coefs.rx2(2)
+sl_lgm = str(round(sl_lgm[0],3))
+r.confint(lm)
+
+r_sq_lab_lgm = "R^{2}~"+r_sq
+
+# Mean Annual Coefs
+lm = stats.lm("discharge ~ areas", data=dat_frame2)
+
+summary = r.summary(lm)
+
+r_sq = summary.rx2('r.squared')
+r_sq = str(+round(r_sq[0],2))
+coefs = r.coef(lm)
+print coefs
+ic = coefs.rx2(1)
+sl = coefs.rx2(2)
+sl = str(round(sl[0],3))
+r.confint(lm)
+
+r_sq_lab = "R^{2}~"+r_sq
+
+
+y_lab = r("expression(Discharge (m^{3}/s))")
+x_lab = r("expression(Area (km^{2}))")
+annotate1 = r('annotate("text", x = '+str(max(areas)-30)+', y = 0.5, color = "red", label = "Mean Annual", parse=FALSE)')
+annotate2 = r('annotate("text", x = '+str(max(areas)-30)+', y = 0.42, label = "'+r_sq_lab+'", color = "red", parse=TRUE)')
+annotate3 = r('annotate("text", x = '+str(max(areas)-30)+', y = 0.34, label = "slope~'+sl+'", color = "red", parse=TRUE)')
+
+annotate4 = r('annotate("text", x = '+str(max(areas)-150)+', y = 0.7, color = "blue", label = "LGM", parse=FALSE)')
+annotate5 = r('annotate("text", x = '+str(max(areas)-150)+', y = 0.6, color = "blue", label = "'+r_sq_lab_lgm+'", parse=TRUE)')
+annotate6 = r('annotate("text", x = '+str(max(areas)-150)+', y = 0.5, color = "blue", label = "slope~'+sl_lgm+'", parse=TRUE)')
+
+pp = ggplot2.ggplot(dat_frame) + \
+    ggplot2.aes_string(y='discharge', x='areas') + \
+    ggplot2.ggtitle('Area vs. Sediment Flux') + \
+    ggplot2.scale_x_log10(x_lab) + \
+    ggplot2.theme_bw() + \
+    ggplot2.stat_smooth(method = "lm", formula = 'y ~ x') + \
+    ggplot2.scale_y_log10(y_lab) + \
+    annotate1 + \
+    annotate2 + \
+    annotate3 + \
+    annotate4 + \
+    annotate5 + \
+    annotate6 + \
+    ggplot2.geom_point(color='blue') + \
+    ggplot2.geom_errorbar(ggplot2.aes_string(ymin='min',ymax='max'), data=dat_frame, width=.02, alpha=.3) + \
+    ggplot2.geom_point(data=dat_frame2,color='red',show_guide='FALSE' ) + \
+    ggplot2.stat_smooth(data=dat_frame2, method = "lm", formula = 'y ~ x', color='red')
 
 grdevices = importr('grDevices')
 
-grdevices.pdf(file="file.pdf")
+grdevices.pdf(file="area_qs.pdf")
 pp.plot()
 grdevices.dev_off()
